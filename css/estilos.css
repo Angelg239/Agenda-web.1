@@ -1,12 +1,10 @@
 /* ════════════════════════════════════════════════════════
-   estilos.css · AgendaWeb (kit de rescate)
+   estilos.css · AgendaWeb (kit completo con buscador)
 
    ★ EDITA SOLO EL BLOQUE "MARCA" (:root) ★
-   Todo lo demás ya usa esas variables con var(--...),
-   así que al cambiar la marca cambia toda tu página.
    ════════════════════════════════════════════════════════ */
 
-/* ===== MARCA (Paso 5: reemplaza estos valores por los de tu marca) ===== */
+/* ===== MARCA ===== */
 :root {
   --color-fondo: #FBF8FD;
   --color-superficie: #FFFFFF;
@@ -18,7 +16,7 @@
   --fuente-titulos: 'Fredoka', sans-serif;
   --fuente-texto: 'Plus Jakarta Sans', sans-serif;
 }
-/* ===== FIN DE LA MARCA · no necesitas cambiar nada de aquí hacia abajo ===== */
+/* ===== FIN DE LA MARCA ===== */
 
 *,
 *::before,
@@ -103,7 +101,6 @@ body {
   border-color: var(--color-acento);
 }
 
-/* Campo con error (lo agregas en el Paso 7) */
 .form-input.is-invalid,
 .form-select.is-invalid,
 .form-textarea.is-invalid {
@@ -116,7 +113,6 @@ body {
   margin: 4px 0 0;
 }
 
-/* Fila de dos campos (reto extra: fecha + hora) */
 .form-row {
   display: flex;
   flex-wrap: wrap;
@@ -145,6 +141,27 @@ body {
   background-color: var(--color-acento-oscuro);
 }
 
+/* Botón secundario para limpiar */
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-weight: 700;
+  color: #334155;
+  background-color: #E2E8F0;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 16px;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background-color: #CBD5E1;
+}
+
 /* ===== AVISOS ===== */
 .alert {
   font-weight: 600;
@@ -164,4 +181,26 @@ body {
   background-color: #FDECEA;
   color: #B42318;
   border: 1px solid #F5C2BC;
+}
+
+/* ===== ESTILOS DEL BUSCADOR (Tus estilos personalizados) ===== */
+.buscador { 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 8px; 
+  margin: 0 0 18px; 
+  background: #F8FAFC;
+  border: 1px solid var(--color-borde);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.buscador .form-input  { 
+  flex: 1 1 220px; 
+  width: auto; 
+}
+
+.buscador .form-select { 
+  flex: 0 1 210px; 
+  width: auto; 
 }

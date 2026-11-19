@@ -19,7 +19,7 @@ $idEvento = null;
 $titulo = '';
 $fecha = '';
 $hora = '';
-$categoria = '';    
+$categoria = 0;
 $descripcion = '';
 $errores = [];
 
@@ -28,7 +28,7 @@ if (isset($_GET['id']) && filter_var($_GET['id'], FILTER_VALIDATE_INT)) {
     $idEvento = (int)$_GET['id'];
 
     try {
-        $stmt = $mysqli->prepare("SELECT titulo, fecha, hora, categoria, descripcion FROM eventos WHERE id = ? AND usuario_id = ?");
+        $stmt = $mysqli->prepare("SELECT titulo, fecha, hora, categoria_id, descripcion FROM eventos WHERE id = ? AND usuario_id = ?");
         $stmt->bind_param('ii', $idEvento, $usuarioId);
         $stmt->execute();
         $resultado = $stmt->get_result();
@@ -37,7 +37,7 @@ if (isset($_GET['id']) && filter_var($_GET['id'], FILTER_VALIDATE_INT)) {
             $titulo = $evento['titulo'];
             $fecha = $evento['fecha'];
             $hora = $evento['hora'] ? substr($evento['hora'], 0, 5) : '';
-            $categoria = $evento['categoria'];
+            $categoria = (int) $evento['categoria_id'];
             $descripcion = $evento['descripcion'] ?? '';
         } else {
             // Si el ID no existe o no es de este usuario, redirigir al inicio
@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $titulo      = trim($_POST['titulo']       ?? '');
     $fecha       = trim($_POST['fecha']        ?? '');
     $hora        = trim($_POST['hora']         ?? '');
-    $categoria   = trim($_POST['categoria']    ?? '');
+    $categoria   = filter_var($_POST['categoria_id'] ?? 0, FILTER_VALIDATE_INT) ? (int) $_POST['categoria_id'] : 0;
     $descripcion = trim($_POST['descripcion'] ?? '');
 
     // 1. Validar título
@@ -89,8 +89,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // 4. Validar categoría
-    $categoriasPermitidas = ['trabajo', 'personal', 'estudio', 'deporte', 'ocio'];
-    if ($categoria === '') {
+    $categoriasPermitidas = [1, 2, 3, 4, 5];
+    if ($categoria === 0) {
         $errores['categoria'] = 'Debes seleccionar una categoría.';
     } elseif (!in_array($categoria, $categoriasPermitidas, true)) {
         $errores['categoria'] = 'La categoría seleccionada no es válida.';
@@ -109,14 +109,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($idEvento) {
                 // Si hay ID, actualizamos el registro existente (UPDATE) validando usuario_id
-                $sql = "UPDATE eventos SET titulo = ?, fecha = ?, hora = ?, categoria = ?, descripcion = ? WHERE id = ? AND usuario_id = ?";
+                $sql = "UPDATE eventos SET titulo = ?, fecha = ?, hora = ?, categoria_id = ?, descripcion = ? WHERE id = ? AND usuario_id = ?";
                 $stmt = $mysqli->prepare($sql);
-                $stmt->bind_param('sssssii', $titulo, $fecha, $valorHora, $categoria, $valorDescripcion, $idEvento, $usuarioId);
+                $stmt->bind_param('sssisii', $titulo, $fecha, $valorHora, $categoria, $valorDescripcion, $idEvento, $usuarioId);
             } else {
                 // Si no hay ID, creamos uno nuevo (INSERT) asociándolo al $usuarioId actual
-                $sql = "INSERT INTO eventos (usuario_id, titulo, fecha, hora, categoria, descripcion) VALUES (?, ?, ?, ?, ?, ?)";
+                $sql = "INSERT INTO eventos (usuario_id, titulo, fecha, hora, categoria_id, descripcion) VALUES (?, ?, ?, ?, ?, ?)";
                 $stmt = $mysqli->prepare($sql);
-                $stmt->bind_param('isssss', $usuarioId, $titulo, $fecha, $valorHora, $categoria, $valorDescripcion);
+                $stmt->bind_param('isssis', $usuarioId, $titulo, $fecha, $valorHora, $categoria, $valorDescripcion);
             }
 
             $stmt->execute();
@@ -205,19 +205,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="categoria">Categoría</label>
+        <label class="form-label" for="categoria_id">Categoría</label>
         <select 
-          name="categoria" 
-          id="categoria" 
+          name="categoria_id"
+          id="categoria_id"
           class="form-select<?= isset($errores['categoria']) ? ' is-invalid' : '' ?>" 
           required
         >
           <option value="">— Elige una —</option>
-          <option value="trabajo" <?= $categoria === 'trabajo' ? 'selected' : '' ?>>Trabajo</option>
-          <option value="personal" <?= $categoria === 'personal' ? 'selected' : '' ?>>Personal</option>
-          <option value="estudio" <?= $categoria === 'estudio' ? 'selected' : '' ?>>Estudio</option>
-          <option value="deporte" <?= $categoria === 'deporte' ? 'selected' : '' ?>>Deporte</option>
-          <option value="ocio" <?= $categoria === 'ocio' ? 'selected' : '' ?>>Ocio</option>
+          <option value="1" <?= $categoria === 1 ? 'selected' : '' ?>>Trabajo</option>
+          <option value="2" <?= $categoria === 2 ? 'selected' : '' ?>>Personal</option>
+          <option value="3" <?= $categoria === 3 ? 'selected' : '' ?>>Estudio</option>
+          <option value="4" <?= $categoria === 4 ? 'selected' : '' ?>>Deporte</option>
+          <option value="5" <?= $categoria === 5 ? 'selected' : '' ?>>Ocio</option>
         </select>
         <?php if (isset($errores['categoria'])): ?>
           <p class="form-error"><?= e($errores['categoria']) ?></p>

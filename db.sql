@@ -1,29 +1,40 @@
 CREATE DATABASE IF NOT EXISTS agenda CHARACTER SET utf8mb4;
 USE agenda;
 
-CREATE TABLE IF NOT EXISTS eventos (
-  id          INT AUTO_INCREMENT PRIMARY KEY,   -- número único de cada evento
-  titulo      VARCHAR(120) NOT NULL,            -- obligatorio
-  fecha       DATE         NOT NULL,            -- obligatorio
-  hora        TIME         NULL,                -- opcional (reto extra)
-  categoria   VARCHAR(20)  NOT NULL,            -- obligatorio
-  descripcion VARCHAR(500) NULL,                -- opcional (reto extra)
-  creado_en   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS usuarios (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  nombre     VARCHAR(80)  NOT NULL,
+  correo     VARCHAR(120) NOT NULL UNIQUE,
+  clave_hash VARCHAR(255) NOT NULL,
+  creado_en  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE categorias (
+CREATE TABLE IF NOT EXISTS categorias (
   id     INT AUTO_INCREMENT PRIMARY KEY,
   nombre VARCHAR(50) NOT NULL UNIQUE
 );
 
 INSERT INTO categorias (id, nombre) VALUES
-  (1, 'Trabajo'),
-  (2, 'Personal'),
-  (3, 'Estudio'),
-  (4, 'Ocio / Deporte');
+  (1, 'trabajo'),
+  (2, 'personal'),
+  (3, 'estudio'),
+  (4, 'deporte'),
+  (5, 'ocio')
+ON DUPLICATE KEY UPDATE nombre = VALUES(nombre);
 
-SELECT * FROM categorias;
+CREATE TABLE IF NOT EXISTS eventos (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  usuario_id  INT NOT NULL,
+  titulo      VARCHAR(120) NOT NULL,
+  fecha       DATE NOT NULL,
+  hora        TIME NULL,
+  categoria_id INT NOT NULL,
+  descripcion VARCHAR(500) NULL,
+  creado_en   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_eventos_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+  CONSTRAINT fk_eventos_categoria FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+);
 
-INSERT INTO usuarios (nombre, correo, clave_hash) 
-VALUES ('Administrador', 'admin@gmail.com', '123456')
-ON DUPLICATE KEY UPDATE correo=correo;
+INSERT INTO usuarios (nombre, correo, clave_hash)
+VALUES ('Administrador', 'admin@gmail.com', '$2y$12$C./BmHK6yfihRXMBShJL3uOviIWe4eCBWrD3Tga8hoRRgIPbs1FNu')
+ON DUPLICATE KEY UPDATE correo = correo;

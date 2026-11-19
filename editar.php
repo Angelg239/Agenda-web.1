@@ -9,6 +9,7 @@ function e(?string $valor): string
     return htmlspecialchars($valor ?? '', ENT_QUOTES, 'UTF-8');
 }
 
+require __DIR__ . '/partes/sesion.php';
 require 'conexion.php';
 
 // Inicialización de variables
@@ -27,8 +28,8 @@ if (isset($_GET['id']) && filter_var($_GET['id'], FILTER_VALIDATE_INT)) {
     // Solo cargamos de la BD si el formulario NO se acaba de enviar por POST
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         try {
-            $stmt = $mysqli->prepare("SELECT titulo, fecha, hora, categoria_id, descripcion FROM eventos WHERE id = ?");
-            $stmt->bind_param('i', $id);
+            $stmt = $mysqli->prepare("SELECT titulo, fecha, hora, categoria_id, descripcion FROM eventos WHERE id = ? AND usuario_id = ?");
+            $stmt->bind_param('ii', $id, $usuarioId);
             $stmt->execute();
             $resultado = $stmt->get_result();
 
@@ -107,9 +108,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $sql = 'UPDATE eventos
                         SET titulo = ?, fecha = ?, hora = ?, categoria_id = ?, descripcion = ?
-                      WHERE id = ?';
+                      WHERE id = ? AND usuario_id = ?';
             $stmt = $mysqli->prepare($sql);
-            $stmt->bind_param('sssisi', $titulo, $fecha, $horaBD, $categoriaId, $descBD, $id);
+            $stmt->bind_param('sssisii', $titulo, $fecha, $horaBD, $categoriaId, $descBD, $id, $usuarioId);
             $stmt->execute();
             $stmt->close();
             $mysqli->close();

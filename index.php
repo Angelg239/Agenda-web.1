@@ -100,6 +100,7 @@ $guardado = isset($_GET['ok']);
 $eliminado = isset($_GET['deleted']);
 $errorBD = false;
 $eventos = [];
+$categorias = [];
 
 // Procesar eliminación asegurando que el evento pertenezca al usuario actual
 if (isset($_GET['eliminar'])) {
@@ -118,19 +119,49 @@ if (isset($_GET['eliminar'])) {
     }
 }
 
-// Consultar los eventos guardados en la base de datos filtrados por usuario_id
+// Procesar búsqueda, categorías y consulta dinámica con prepared statements
 try {
     require 'conexion.php';
 
-    $stmt = $mysqli->prepare("SELECT id, titulo, fecha, hora, categoria, descripcion FROM eventos WHERE usuario_id = ? ORDER BY fecha ASC, hora ASC");
-    $stmt->bind_param("i", $usuarioId);
-    $stmt->execute();
-    $resultado = $stmt->get_result();
+    $q = mb_substr(trim($_GET['q'] ?? ''), 0, 60);        // texto, máximo 60 caracteres
+    $categoriaId = (int) ($_GET['categoria'] ?? 0);        // 0 = todas
 
-    if ($resultado) {
-        $eventos = $resultado->fetch_all(MYSQLI_ASSOC);
-        $resultado->free();
+    // Las categorías del filtro
+    $categorias = $mysqli->query('SELECT id, nombre FROM categorias ORDER BY nombre')->fetch_all(MYSQLI_ASSOC);
+    $idsValidos = array_map('intval', array_column($categorias, 'id'));
+    if (!in_array($categoriaId, $idsValidos, true)) {
+        $categoriaId = 0;                                  // una categoría inventada = todas
     }
+    $buscando = ($q !== '' || $categoriaId !== 0);
+
+    $condiciones = ['e.usuario_id = ?'];                        // SIEMPRE: solo mis eventos
+    $tipos       = 'i';
+    $valores     = [$usuarioId];
+
+    if ($q !== '') {
+        $patron = '%' . addcslashes($q, '%_\\') . '%';
+        $condiciones[] = '(e.titulo LIKE ? OR e.descripcion LIKE ?)';
+        $tipos      .= 'ss';
+        $valores[]   = $patron;
+        $valores[]   = $patron;
+    }
+    if ($categoriaId !== 0) {
+        $condiciones[] = 'e.categoria_id = ?';
+        $tipos      .= 'i';
+        $valores[]   = $categoriaId;
+    }
+
+    $sql = 'SELECT e.id, e.titulo, e.fecha, e.hora, e.descripcion,
+                  c.nombre AS categoria
+              FROM eventos e
+              JOIN categorias c ON c.id = e.categoria_id
+             WHERE ' . implode(' AND ', $condiciones) . '
+             ORDER BY e.fecha, e.hora';
+             
+    $stmt = $mysqli->prepare($sql);
+    $stmt->bind_param($tipos, ...$valores);
+    $stmt->execute();
+    $eventos = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
     $mysqli->close();
 } catch (mysqli_sql_exception $e) {
@@ -152,7 +183,6 @@ foreach ($eventos as $ev) {
 $mesActual = isset($_GET['mes']) ? (int)$_GET['mes'] : (int)date('m');
 $anioActual = isset($_GET['anio']) ? (int)$_GET['anio'] : (int)date('Y');
 
-// Control de navegación de meses
 $mesAnterior = $mesActual - 1;
 $anioAnterior = $anioActual;
 if ($mesAnterior < 1) { $mesAnterior = 12; $anioAnterior--; }
@@ -163,7 +193,6 @@ if ($mesSiguiente > 12) { $mesSiguiente = 1; $anioSiguiente++; }
 
 $nombreMeses = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-// Mapear días que tienen eventos (Formato: 'YYYY-MM-DD')
 $fechasConEventos = [];
 foreach ($eventos as $ev) {
     $fechasConEventos[$ev['fecha']] = true;
@@ -171,7 +200,7 @@ foreach ($eventos as $ev) {
 
 $primerDiaTimestamp = mktime(0, 0, 0, $mesActual, 1, $anioActual);
 $totalDiasMes = date('t', $primerDiaTimestamp);
-$diaSemanaInicio = date('N', $primerDiaTimestamp); // 1 (Lunes) a 7 (Domingo)
+$diaSemanaInicio = date('N', $primerDiaTimestamp);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -181,7 +210,6 @@ $diaSemanaInicio = date('N', $primerDiaTimestamp); // 1 (Lunes) a 7 (Domingo)
     <link href="css/estilos.css" rel="stylesheet">
     <title>Mi agenda · AgendaWeb</title>
     <style>
-        /* Estilos específicos para el calendario */
         .calendar-container { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; }
         .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
         .calendar-header h2 { margin: 0; font-size: 1.1rem; color: #1E293B; }
@@ -197,11 +225,16 @@ $diaSemanaInicio = date('N', $primerDiaTimestamp); // 1 (Lunes) a 7 (Domingo)
 <body>
 <div class="card" style="max-width: 650px; margin: 2rem auto; padding: 2rem;">
     
-    <!-- Encabezado con Saludo y Botones en la esquina superior -->
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 2px solid #F1F5F9; padding-bottom: 1rem;">
         <div>
             <h1 class="card__title" style="margin: 0; font-size: 1.8rem;">Mi agenda</h1>
-            <p class="card__meta" style="margin: 0.2rem 0 0 0;">Hola, <strong><?= e($usuarioNombre) ?></strong> | Total: <?= count($eventos) ?> evento(s)</p>
+            <p class="page__subtitle" style="margin: 0.2rem 0 0 0; color: #6E617A; font-size: 0.9rem;">
+                <?php if ($buscando): ?>
+                    <?= count($eventos) ?> resultado<?= count($eventos) === 1 ? '' : 's' ?><?= $q !== '' ? ' para «' . e($q) . '»' : '' ?>
+                <?php else: ?>
+                    <?= count($eventos) ?> eventos registrados
+                <?php endif; ?>
+            </p>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
             <a href="registrar.php" class="btn-primary" style="text-decoration: none; padding: 0.6rem 1.2rem; border-radius: 8px; font-weight: 600; white-space: nowrap;">+ Nuevo evento</a>
@@ -241,12 +274,10 @@ $diaSemanaInicio = date('N', $primerDiaTimestamp); // 1 (Lunes) a 7 (Domingo)
             <div class="calendar-day-name">Dom</div>
 
             <?php
-            // Espacios vacíos antes del primer día del mes
             for ($i = 1; $i < $diaSemanaInicio; $i++) {
                 echo '<div class="calendar-cell empty"></div>';
             }
 
-            // Días del mes
             for ($dia = 1; $dia <= $totalDiasMes; $dia++) {
                 $mesStr = str_pad($mesActual, 2, '0', STR_PAD_LEFT);
                 $diaStr = str_pad($dia, 2, '0', STR_PAD_LEFT);
@@ -277,11 +308,35 @@ $diaSemanaInicio = date('N', $primerDiaTimestamp); // 1 (Lunes) a 7 (Domingo)
         </div>
     <?php endif; ?>
 
-    <!-- Lista de eventos guardados -->
+    <!-- FORMULARIO DE BÚSQUEDA (Debajo del resumen por categoría) -->
+    <form class="buscador" method="get" action="index.php" role="search">
+        <input class="form-input" type="search" name="q" value="<?= e($q) ?>" maxlength="60"
+               placeholder="Buscar en título o descripción…" aria-label="Buscar eventos">
+        <select class="form-select" name="categoria" aria-label="Filtrar por categoría">
+            <option value="0">Todas las categorías</option>
+            <?php foreach ($categorias as $cat): ?>
+                <option value="<?= (int) $cat['id'] ?>" <?= $categoriaId === (int) $cat['id'] ? 'selected' : '' ?>>
+                    <?= e($cat['nombre']) ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <button type="submit" class="btn-primary">Buscar</button>
+        <?php if ($buscando): ?>
+            <a href="index.php" class="btn-secondary">Limpiar</a>
+        <?php endif; ?>
+    </form>
+
+    <!-- Lista de eventos guardados con estados vacíos diferenciados -->
     <div class="eventos-container">
-        <?php if (empty($eventos)): ?>
+        <?php if (empty($eventos) && $buscando): ?>
+            <div class="empty-state" style="padding: 2.5rem 1rem; text-align: center; color: #6E617A; background: #F8FAFC; border-radius: 12px; border: 2px dashed #E2E8F0;">
+                <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">Sin resultados para tu búsqueda.</p>
+                <p style="margin: 0.5rem 0 1rem 0; font-size: 0.9rem; color: #94A3B8;">Prueba con otros términos o limpia los filtros.</p>
+                <a href="index.php" class="btn-secondary">Ver todos mis eventos</a>
+            </div>
+        <?php elseif (empty($eventos)): ?>
             <div style="padding: 2.5rem 1rem; text-align: center; color: #6E617A; background: #F8FAFC; border-radius: 12px; border: 2px dashed #E2E8F0;">
-                <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">📅 No tienes eventos programados.</p>
+                <p style="margin: 0; font-size: 1.1rem; font-weight: 500;">📅 Aún no tienes eventos programados.</p>
                 <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem; color: #94A3B8;">Haz clic en el botón superior para agregar tu primer evento.</p>
             </div>
         <?php else: ?>
@@ -296,7 +351,6 @@ $diaSemanaInicio = date('N', $primerDiaTimestamp); // 1 (Lunes) a 7 (Domingo)
 
 <?php if ($guardado || $eliminado): ?>
 <script>
-    // Oculta las alertas tras 3 segundos
     setTimeout(function() {
         const alerta = document.querySelector('.alert');
         if (alerta) {
