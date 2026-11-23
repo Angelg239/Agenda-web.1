@@ -1,5 +1,4 @@
 <?php
-
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 try {
@@ -11,7 +10,7 @@ try {
 }
 
 // ==========================================
-// Procesamiento y validación de filtros
+// 1. Procesamiento y validación de filtros
 // ==========================================
 $q = mb_substr(trim($_GET['q'] ?? ''), 0, 60);        // Texto, máximo 60 caracteres
 $categoriaId = (int) ($_GET['categoria'] ?? 0);        // 0 = todas
@@ -27,3 +26,39 @@ if (!in_array($categoriaId, $idsValidos, true)) {
 
 // Bandera para saber si el usuario está aplicando algún filtro activo
 $buscando = ($q !== '' || $categoriaId !== 0);
+
+// ==========================================
+// 2. Consulta segura con Prepared Statements
+// ==========================================
+$sql = "SELECT e.*, c.nombre AS categoria_nombre 
+        FROM eventos e 
+        INNER JOIN categorias c ON e.categoria_id = c.id 
+        WHERE 1=1";
+
+$params = [];
+$types = "";
+
+if ($q !== '') {
+    $sql .= " AND e.titulo LIKE ?";
+    $params[] = "%" . $q . "%";
+    $types .= "s";
+}
+
+if ($categoriaId !== 0) {
+    $sql .= " AND e.categoria_id = ?";
+    $params[] = $categoriaId;
+    $types .= "i";
+}
+
+$sql .= " ORDER BY e.fecha DESC";
+
+$stmt = $mysqli->prepare($sql);
+
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
+}
+
+$stmt->execute();
+$resultado = $stmt->get_result();
+$eventos = $resultado->fetch_all(MYSQLI_ASSOC);
+?>

@@ -5,6 +5,7 @@
 
 // 1. Incluir el guardia de seguridad (protege la página y define $usuarioId y $usuarioNombre)
 require __DIR__ . '/partes/sesion.php';
+require_once __DIR__ . '/conexion.php';
 
 // ==========================================
 // FUNCIONES AUXILIARES
@@ -106,12 +107,10 @@ $categorias = [];
 if (isset($_GET['eliminar'])) {
     $idEliminar = (int)$_GET['eliminar'];
     try {
-        require 'conexion.php';
         $stmt = $mysqli->prepare("DELETE FROM eventos WHERE id = ? AND usuario_id = ?");
         $stmt->bind_param("ii", $idEliminar, $usuarioId);
         $stmt->execute();
         $stmt->close();
-        $mysqli->close();
         header('Location: index.php?deleted=1');
         exit;
     } catch (mysqli_sql_exception $e) {
@@ -119,10 +118,8 @@ if (isset($_GET['eliminar'])) {
     }
 }
 
-// Procesar búsqueda, categorías y consulta dinámica con prepared statements
+// Procesar búsqueda, categorías y consulta dinámica con arreglos y prepared statements
 try {
-    require 'conexion.php';
-
     $q = mb_substr(trim($_GET['q'] ?? ''), 0, 60);        // texto, máximo 60 caracteres
     $categoriaId = (int) ($_GET['categoria'] ?? 0);        // 0 = todas
 
@@ -134,11 +131,13 @@ try {
     }
     $buscando = ($q !== '' || $categoriaId !== 0);
 
-    $condiciones = ['e.usuario_id = ?'];                        // SIEMPRE: solo mis eventos
+    // Consulta dinámica basada en arreglos
+    $condiciones = ['e.usuario_id = ?'];                    // SIEMPRE: solo mis eventos (P8)
     $tipos       = 'i';
     $valores     = [$usuarioId];
 
     if ($q !== '') {
+        // % y _ son comodines de LIKE: se escapan para buscarlos como texto normal
         $patron = '%' . addcslashes($q, '%_\\') . '%';
         $condiciones[] = '(e.titulo LIKE ? OR e.descripcion LIKE ?)';
         $tipos      .= 'ss';
@@ -151,19 +150,19 @@ try {
         $valores[]   = $categoriaId;
     }
 
+    // implode une NUESTRAS piezas fijas; los datos del usuario solo viajan por los ?
     $sql = 'SELECT e.id, e.titulo, e.fecha, e.hora, e.descripcion,
-                  c.nombre AS categoria
+                   c.nombre AS categoria
               FROM eventos e
               JOIN categorias c ON c.id = e.categoria_id
              WHERE ' . implode(' AND ', $condiciones) . '
              ORDER BY e.fecha, e.hora';
              
     $stmt = $mysqli->prepare($sql);
-    $stmt->bind_param($tipos, ...$valores);
+    $stmt->bind_param($tipos, ...$valores);                 // ... reparte el arreglo en argumentos
     $stmt->execute();
     $eventos = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
-    $mysqli->close();
 } catch (mysqli_sql_exception $e) {
     $errorBD = true;
 }
@@ -180,8 +179,20 @@ foreach ($eventos as $ev) {
 // ==========================================
 // CONFIGURACIÓN DEL CALENDARIO
 // ==========================================
-$mesActual = isset($_GET['mes']) ? (int)$_GET['mes'] : (int)date('m');
-$anioActual = isset($_GET['anio']) ? (int)$_GET['anio'] : (int)date('Y');
+$mesActual = filter_var($_GET['mes'] ?? date('m'), FILTER_VALIDATE_INT);
+$anioActual = filter_var($_GET['anio'] ?? date('Y'), FILTER_VALIDATE_INT);
+
+if ($mesActual === false || $mesActual < 1 || $mesActual > 12) {
+    $mesActual = (int)date('m');
+} else {
+    $mesActual = (int)$mesActual;
+}
+
+if ($anioActual === false || $anioActual < 1970 || $anioActual > 2100) {
+    $anioActual = (int)date('Y');
+} else {
+    $anioActual = (int)$anioActual;
+}
 
 $mesAnterior = $mesActual - 1;
 $anioAnterior = $anioActual;
